@@ -14,13 +14,12 @@ import cc3d
 
 # convert nii image to npz files, including original image and corresponding masks
 modality = "CT"
-anatomy = "Abd"  # anantomy + dataset name
-img_name_suffix = "_0000.nii.gz"
-gt_name_suffix = ".nii.gz"
+anatomy = "RPA"  # anantomy + dataset name
 prefix = modality + "_" + anatomy + "_"
 
-nii_path = "data/FLARE22Train/images"  # path to the nii images
-gt_path = "data/FLARE22Train/labels"  # path to the ground truth
+root_path = '/Users/fcremone/dev/research/ontology-olivier/aires-ganglionnaires/rpa-dataset/'
+nii_path = root_path + "nifti/Data/"  # path to the nii images
+gt_path = root_path + "nifti/Masks"  # path to the ground truth
 npy_path = "data/npy/" + prefix[:-1]
 os.makedirs(join(npy_path, "gts"), exist_ok=True)
 os.makedirs(join(npy_path, "imgs"), exist_ok=True)
@@ -31,44 +30,18 @@ voxel_num_thre3d = 1000
 
 names = sorted(os.listdir(gt_path))
 print(f"ori \# files {len(names)=}")
-names = [
-    name
-    for name in names
-    if os.path.exists(join(nii_path, name.split(gt_name_suffix)[0] + img_name_suffix))
-]
-print(f"after sanity check \# files {len(names)=}")
 
-# set label ids that are excluded
-remove_label_ids = [
-    12
-]  # remove deodenum since it is scattered in the image, which is hard to specify with the bounding box
-tumor_id = None  # only set this when there are multiple tumors; convert semantic masks to instance masks
 # set window level and width
 # https://radiopaedia.org/articles/windowing-ct
 WINDOW_LEVEL = 40  # only for CT images
 WINDOW_WIDTH = 400  # only for CT images
 
 # %% save preprocessed images and masks as npz files
-for name in tqdm(names[:40]):  # use the remaining 10 cases for validation
-    image_name = name.split(gt_name_suffix)[0] + img_name_suffix
-    gt_name = name
+for pat_id in tqdm(range(46)): # use the remaining 10 cases for validation
+    gt_name = f'Overall_mask_Examples_y{pat_id}.nii.gz'
+    image_name = f'Overall_Data_Examples_{pat_id}.nii.gz'
     gt_sitk = sitk.ReadImage(join(gt_path, gt_name))
     gt_data_ori = np.uint8(sitk.GetArrayFromImage(gt_sitk))
-    # remove label ids
-    for remove_label_id in remove_label_ids:
-        gt_data_ori[gt_data_ori == remove_label_id] = 0
-    # label tumor masks as instances and remove from gt_data_ori
-    if tumor_id is not None:
-        tumor_bw = np.uint8(gt_data_ori == tumor_id)
-        gt_data_ori[tumor_bw > 0] = 0
-        # label tumor masks as instances
-        tumor_inst, tumor_n = cc3d.connected_components(
-            tumor_bw, connectivity=26, return_N=True
-        )
-        # put the tumor instances back to gt_data_ori
-        gt_data_ori[tumor_inst > 0] = (
-            tumor_inst[tumor_inst > 0] + np.max(gt_data_ori) + 1
-        )
 
     # exclude the objects with less than 1000 pixels in 3D
     gt_data_ori = cc3d.dust(
